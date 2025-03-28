@@ -1,0 +1,120 @@
+@startuml
+title RocketMQ Architecture
+
+' 使用标准样式
+skinparam backgroundColor white
+skinparam componentStyle rectangle
+
+' 定义组件
+package "Producer Cluster" {
+    [Producer 1] as P1
+    [Producer 2] as P2
+    [Producer N] as PN
+}
+
+package "NameServer Cluster" {
+    [NameServer 1] as NS1
+    [NameServer 2] as NS2
+    [NameServer N] as NSN
+}
+
+package "Broker Cluster" {
+    package "Broker Set 1" {
+        [Master Broker 1] as MB1
+        note right of MB1
+          Contains:
+          - Remoting Module
+          - Client Manager
+          - Store Service
+          - HA Service
+          - Index Service
+        end note
+
+        [Slave Broker 1-1] as SB11
+        [Slave Broker 1-2] as SB12
+    }
+
+    package "Broker Set 2" {
+        [Master Broker 2] as MB2
+        [Slave Broker 2-1] as SB21
+    }
+}
+
+package "Consumer Cluster" {
+    package "Consumer Group 1" {
+        [Consumer 1-1] as C11
+        [Consumer 1-2] as C12
+    }
+    package "Consumer Group 2" {
+        [Consumer 2-1] as C21
+        [Consumer 2-2] as C22
+    }
+}
+
+' 定义数据实体
+rectangle "Message" {
+    (Topic)
+    (Body)
+    (Tags)
+    (Keys)
+    (Properties)
+}
+
+rectangle "Topic" {
+    (Name)
+    (QueueNum)
+    (Permission)
+}
+
+rectangle "Queue" {
+    (TopicName)
+    (QueueId)
+    (MinOffset)
+    (MaxOffset)
+}
+
+rectangle "ConsumerGroup" {
+    (GroupName)
+    (ConsumerType)
+    (MessageModel)
+}
+
+' 定义关系
+P1 -down-> NS1 : 1. Get Topic Route
+P1 -down-> MB1 : 2. Send Message
+P2 -down-> NS2 : 1. Get Topic Route
+PN -down-> NSN : 1. Get Topic Route
+
+MB1 -right-> SB11 : Sync Message
+MB1 -right-> SB12 : Sync Message
+MB2 -right-> SB21 : Sync Message
+
+MB1 -up-> NS1 : Register & Heartbeat
+MB1 -up-> NS2 : Register & Heartbeat
+MB2 -up-> NS1 : Register & Heartbeat
+MB2 -up-> NS2 : Register & Heartbeat
+
+C11 -up-> NS1 : 1. Get Topic Route
+C11 -up-> MB1 : 2. Pull Message
+C11 -up-> SB11 : 3. Pull Message (Slave)
+C12 -up-> NS2 : 1. Get Topic Route
+C21 -up-> MB2 : 2. Pull Message
+C22 -up-> SB21 : 3. Pull Message (Slave)
+
+' 添加注释
+note right of P1
+  Producer randomly selects one NameServer
+  to get Topic routing information
+end note
+
+note right of NS1
+  NameServer provides service discovery
+  and routing information management
+end note
+
+note right of C11
+  Consumers can pull messages from
+  both Master and Slave Brokers
+end note
+
+@enduml
